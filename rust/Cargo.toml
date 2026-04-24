@@ -1,0 +1,16 @@
+[package]
+name = "pico-runtime"
+version = "0.1.0"
+edition = "2021"
+description = "Native runtime for the picohp self-hosting compiler"
+
+[lib]
+name = "pico_runtime"
+crate-type = ["staticlib"]
+
+[dependencies]
+regex = "1"
+
+[profile.release]
+lto = true
+opt-level = "s"
