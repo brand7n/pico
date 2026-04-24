@@ -1,4 +1,4 @@
-# Pico Runtime Specification v0.2
+# Pico Runtime Specification v0.3
 
 ## Overview
 
@@ -10,7 +10,7 @@ The Pico dialect is **standard PHP** — not a custom syntax or preprocessor. Pi
 
 ## Design Principles
 
-1. **No mixed.** Every value has a concrete type known at compile time. The PHP `mixed` type exists only in method signatures for PHPStan compatibility; the compiler resolves it to the actual type via `@template` annotations.
+1. **No mixed.** Every value has a concrete type known at compile time. The PHP `mixed` type exists only in method signatures for PHPStan compatibility; the compiler resolves it to the actual type via `@template` annotations. For the rare cases where heterogeneous storage is genuinely needed (e.g., a parser semantic value stack), `Value` provides explicit tagged storage with runtime type checking.
 
 2. **Standard PHP syntax.** Array bracket operators (`$a[0]`, `$a['key']`, `$a[] = $v`) work on `Collection` via PHP's `ArrayAccess` interface. Array literals (`[1, 2, 3]`) work via `Collection::from()`. The code is valid PHP that runs under any PHP 8.2+ interpreter.
 
@@ -18,7 +18,9 @@ The Pico dialect is **standard PHP** — not a custom syntax or preprocessor. Pi
 
 4. **Two implementations per class.** A PHP reference implementation (for the interpreter and differential testing) and a Rust native implementation (linked as a static `.a` for production). Both must be behaviorally identical.
 
-5. **Compile-time type dispatch.** The compiler chooses which runtime function to call based on the resolved type. A `Collection<int>::push(42)` emits `pico_collection_push_int`. A `Collection<Node>::push($node)` emits `pico_collection_push_ptr`. The runtime never inspects types at runtime.
+5. **Compile-time type dispatch.** The compiler chooses which runtime function to call based on the resolved type. A `Collection<int>::push(42)` emits `pico_collection_push_int`. A `Collection<Node>::push($node)` emits `pico_collection_push_ptr`. The runtime never inspects types at runtime — except through `Value`, which is the explicit opt-in for runtime-tagged storage.
+
+6. **Pointer-sized integers.** Pico `int` is `i64` on 64-bit platforms — the same width as a pointer. This eliminates truncation/extension when storing ints in pointer-sized slots, simplifies the FFI surface (one integer width), and avoids artificial limits on indices and sizes.
 
 ## Namespace
 
@@ -253,14 +255,14 @@ $ids = Collection::from([1, 2, 3]);
 
 // Compiler emits (IR level)
 %c = call ptr @pico_collection_new()
-call void @pico_collection_push_int(ptr %c, i32 1)
-call void @pico_collection_push_int(ptr %c, i32 2)
-call void @pico_collection_push_int(ptr %c, i32 3)
+call void @pico_collection_push_int(ptr %c, i64 1)
+call void @pico_collection_push_int(ptr %c, i64 2)
+call void @pico_collection_push_int(ptr %c, i64 3)
 ```
 
 `Collection::from()` with a non-literal argument (a variable) is a compile error. For constructing from existing data, use the constructor and `push()`.
 
-**LLVM representation:** `ptr` (pointer to `PicoMap` struct). All elements stored as their concrete LLVM type — `i32` for `Collection<int>`, `ptr` for `Collection<Node>`.
+**LLVM representation:** `ptr` (pointer to `PicoMap` struct). All elements stored as 64-bit slots — `i64` for `Collection<int>`, `ptr` for `Collection<Node>`. Since `int` and `ptr` are both 64 bits, there is no type distinction at the storage level.
 
 **Escape analysis:** `push`, `set`, `setAt` capture their value argument into `$this` (`ArgEscape` — value escapes as far as the collection does). `get`, `getAt`, `pop`, `last` return values that escape via return. `$this` is `ArgEscape` on mutating methods.
 
@@ -288,6 +290,60 @@ class File
 **Escape analysis:** `readContents` returns a new string that escapes. Arguments are `NoEscape` (paths are read, not captured).
 
 **Replaces:** `file_get_contents`, `file_put_contents`, `file_exists`, `is_file`, `is_dir`.
+
+### Remodulate\Pico\Value
+
+Tagged value for heterogeneous storage. Wraps a value with a type tag for runtime type checking. Used where compile-time type information is insufficient — primarily the parser's semantic value stack, which holds tokens (int/string) and AST nodes (objects) on the same stack.
+
+```php
+namespace Remodulate\Pico;
+
+class Value
+{
+    public const NULL   = 0;
+    public const INT    = 1;
+    public const BOOL   = 2;
+    public const FLOAT  = 3;
+    public const STRING = 4;
+    public const OBJECT = 5;
+
+    public static function none(): self;
+    public static function fromInt(int $v): self;
+    public static function fromBool(bool $v): self;
+    public static function fromFloat(float $v): self;
+    public static function fromString(PicoString $v): self;
+    public static function fromObject(object $v): self;
+
+    public function tag(): int;
+    public function isNull(): bool;
+
+    public function asInt(): int;       // throws on tag mismatch
+    public function asBool(): bool;     // throws on tag mismatch
+    public function asFloat(): float;   // throws on tag mismatch
+    public function asString(): PicoString;  // throws on tag mismatch
+    public function asObject(): object;      // throws on tag mismatch
+}
+```
+
+**LLVM representation:** `{ i64, i64 }` — 16 bytes (tag + bits). The `bits` field stores `i64` for int, `i64` (0/1) for bool, `double` bit-cast for float, or `ptr` as integer for string/object. Since `int` and `ptr` are both 64 bits, no conversion is needed.
+
+**Usage pattern:** `Collection<Value>` stores pointers to Value structs via the existing `push_ptr` / `get_ptr_at` functions. No new Collection code is needed.
+
+```php
+// Parser semantic value stack
+/** @var Collection<Value> */
+$semStack = new Collection();
+
+// Shift: push token text
+$semStack->push(Value::fromString($tokenValue));
+
+// Reduce: access values by grammar-determined types
+$node = $semStack[$stackPos]->asObject();
+$kind = $semStack[$stackPos - 2]->asInt();
+$semStack[$stackPos] = Value::fromObject(new BinaryOp($kind, $left, $right));
+```
+
+**Escape analysis:** `Value` constructors allocate a new Value that escapes via return. `as*` accessors are `NoEscape` on `$this` (read-only tag check + return extracted value).
 
 ## Usage Examples
 
@@ -321,7 +377,7 @@ $len = $ids->count();               // or count($ids) via Countable
 
 // StringBuilder for output
 $sb = new StringBuilder();
-$sb->append(new PicoString("define i32 @main() {\n"));
+$sb->append(new PicoString("define i64 @main() {\n"));
 $sb->appendInt(42);
 $output = $sb->toString();
 
@@ -342,7 +398,7 @@ The same code above, from the compiler's perspective:
 // $first = $ids[0];
 // Compiler sees: ArrayDimFetch on Collection<int> with int dim
 // Resolves element type: int (from @template T = int)
-// Emits: pico_collection_get_int_at(ptr, i32) → i32
+// Emits: pico_collection_get_int_at(ptr, i64) → i64
 
 // $registry['Foo\\Bar'] = $meta;
 // Compiler sees: Assign with ArrayDimFetch on Collection<ClassMetadata> with string dim
@@ -361,7 +417,7 @@ The same code above, from the compiler's perspective:
 
 | Pico type | PHP type | LLVM type |
 |---|---|---|
-| `int` | `int` | `i32` |
+| `int` | `int` | `i64` |
 | `float` | `float` | `double` |
 | `bool` | `bool` | `i1` |
 | `string` | `Remodulate\Pico\PicoString` | `ptr` |
@@ -369,16 +425,16 @@ The same code above, from the compiler's perspective:
 
 ### Object types
 
-All classes compile to LLVM structs. Field 0 is always `i32 type_id` for runtime type identification (instanceof, catch dispatch).
+All classes compile to LLVM structs. Field 0 is always `i64 type_id` for runtime type identification (instanceof, catch dispatch).
 
 ```llvm
-%struct.Point = type { i32, i32, i32 }     ; type_id, x, y
-%struct.Token = type { i32, i32, ptr }     ; type_id, kind, value
+%struct.Point = type { i64, i64, i64 }     ; type_id, x, y
+%struct.Token = type { i64, i64, ptr }     ; type_id, kind, value
 ```
 
 ### Nullable types
 
-`?T` is represented as `ptr` regardless of the underlying type. Null is the zero pointer. For nullable scalars (`?int`), the value is stored as a pointer-sized integer via `inttoptr`/`ptrtoint`.
+`?T` is represented as `ptr` regardless of the underlying type. Null is the zero pointer. For nullable scalars (`?int`), the value is stored as a pointer-sized integer via `inttoptr`/`ptrtoint` — this is a no-op since `int` and `ptr` are both 64 bits.
 
 ### Collection types (via @template)
 
@@ -499,10 +555,12 @@ Optimized PicoIR
 
 ## Runtime ABI
 
+All integer parameters and returns use `i64` — there is a single integer width in the ABI. This includes values typed as `int`, `bool`, counts, indices, and tag constants. Pointers are `ptr` (64-bit on all supported platforms).
+
 ### Object allocation
 
 ```
-ptr picohp_object_alloc(i64 size, i32 type_id)
+ptr picohp_object_alloc(i64 size, i64 type_id)
 ```
 
 Allocates `size` bytes on the GC heap, returns a pointer. The caller stores `type_id` at field 0. Escape analysis may replace this with `alloca` (stack allocation) when the object does not escape.
@@ -513,68 +571,69 @@ Naming convention: `pico_collection_{op}_{valuetype}[_at]`
 
 Sequential access (integer key):
 ```
-void pico_collection_push_int(ptr collection, i32 value)
+void pico_collection_push_int(ptr collection, i64 value)
 void pico_collection_push_str(ptr collection, ptr value)
 void pico_collection_push_ptr(ptr collection, ptr value)
-i32  pico_collection_get_int_at(ptr collection, i32 index)
-ptr  pico_collection_get_str_at(ptr collection, i32 index)
-ptr  pico_collection_get_ptr_at(ptr collection, i32 index)
-void pico_collection_set_int_at(ptr collection, i32 index, i32 value)
-void pico_collection_set_str_at(ptr collection, i32 index, ptr value)
-void pico_collection_set_ptr_at(ptr collection, i32 index, ptr value)
+i64  pico_collection_get_int_at(ptr collection, i64 index)
+ptr  pico_collection_get_str_at(ptr collection, i64 index)
+ptr  pico_collection_get_ptr_at(ptr collection, i64 index)
+void pico_collection_set_int_at(ptr collection, i64 index, i64 value)
+void pico_collection_set_str_at(ptr collection, i64 index, ptr value)
+void pico_collection_set_ptr_at(ptr collection, i64 index, ptr value)
 ```
 
 Associative access (string key):
 ```
-i32  pico_collection_get_int(ptr collection, ptr key)
+i64  pico_collection_get_int(ptr collection, ptr key)
 ptr  pico_collection_get_str(ptr collection, ptr key)
 ptr  pico_collection_get_ptr(ptr collection, ptr key)
-void pico_collection_set_int(ptr collection, ptr key, i32 value)
+void pico_collection_set_int(ptr collection, ptr key, i64 value)
 void pico_collection_set_str(ptr collection, ptr key, ptr value)
 void pico_collection_set_ptr(ptr collection, ptr key, ptr value)
-i32  pico_collection_has(ptr collection, ptr key) → bool as i32
+i64  pico_collection_has(ptr collection, ptr key)
 ```
 
 Common:
 ```
 ptr  pico_collection_new()
-i32  pico_collection_count(ptr collection)
-i32  pico_collection_valid_index(ptr collection, i32 index) → bool as i32
-i32  pico_collection_pop_int(ptr collection)
+i64  pico_collection_count(ptr collection)
+i64  pico_collection_valid_index(ptr collection, i64 index)
+i64  pico_collection_pop_int(ptr collection)
 ptr  pico_collection_pop_str(ptr collection)
 ptr  pico_collection_pop_ptr(ptr collection)
-ptr  pico_collection_last_int(ptr collection) → i32
-ptr  pico_collection_last_str(ptr collection) → ptr
-ptr  pico_collection_last_ptr(ptr collection) → ptr
-ptr  pico_collection_key_at(ptr collection, i32 index)
-ptr  pico_collection_slice(ptr collection, i32 start, i32 length)
-i32  pico_collection_index_of_int(ptr collection, i32 needle) → i32
-i32  pico_collection_index_of_str(ptr collection, ptr needle) → i32
-i32  pico_collection_contains_int(ptr collection, i32 needle) → bool as i32
-i32  pico_collection_contains_str(ptr collection, ptr needle) → bool as i32
+i64  pico_collection_last_int(ptr collection)
+ptr  pico_collection_last_str(ptr collection)
+ptr  pico_collection_last_ptr(ptr collection)
+ptr  pico_collection_key_at(ptr collection, i64 index)
+ptr  pico_collection_slice(ptr collection, i64 start, i64 length)
+i64  pico_collection_index_of_int(ptr collection, i64 needle)
+i64  pico_collection_index_of_str(ptr collection, ptr needle)
+i64  pico_collection_contains_int(ptr collection, i64 needle)
+i64  pico_collection_contains_str(ptr collection, ptr needle)
+ptr  pico_collection_join(ptr collection, ptr delimiter)
 ```
 
 ### String runtime functions
 
 ```
-ptr  pico_string_new(ptr data, i32 length)
-i32  pico_string_length(ptr s)
-i32  pico_string_char_at(ptr s, i32 index)
-ptr  pico_string_substring(ptr s, i32 start, i32 length)
-i32  pico_string_index_of(ptr s, ptr needle, i32 offset)
-i32  pico_string_starts_with(ptr s, ptr prefix)
-i32  pico_string_ends_with(ptr s, ptr suffix)
-i32  pico_string_contains(ptr s, ptr needle)
+i64  pico_string_length(ptr s)
+i64  pico_string_char_at(ptr s, i64 index)
+ptr  pico_string_substring(ptr s, i64 start, i64 length)
+i64  pico_string_index_of(ptr s, ptr needle, i64 offset)
+i64  pico_string_starts_with(ptr s, ptr prefix)
+i64  pico_string_ends_with(ptr s, ptr suffix)
+i64  pico_string_contains(ptr s, ptr needle)
 ptr  pico_string_concat(ptr a, ptr b)
-i32  pico_string_equals(ptr a, ptr b)
+i64  pico_string_equals(ptr a, ptr b)
 ptr  pico_string_trim(ptr s)
 ptr  pico_string_to_lower(ptr s)
 ptr  pico_string_to_upper(ptr s)
 ptr  pico_string_replace(ptr s, ptr search, ptr replace)
 ptr  pico_string_split(ptr s, ptr delimiter)
-i32  pico_string_to_int(ptr s)
-ptr  pico_int_to_string(i32 val)
+i64  pico_string_to_int(ptr s)
+ptr  pico_int_to_string(i64 val)
 ptr  pico_float_to_string(double val)
+ptr  pico_string_format(ptr template, ptr args, i64 arg_count)
 ```
 
 ### StringBuilder runtime functions
@@ -582,10 +641,10 @@ ptr  pico_float_to_string(double val)
 ```
 ptr  pico_sb_new()
 void pico_sb_append(ptr sb, ptr s)
-void pico_sb_append_char(ptr sb, i32 byte)
-void pico_sb_append_int(ptr sb, i32 val)
+void pico_sb_append_char(ptr sb, i64 byte)
+void pico_sb_append_int(ptr sb, i64 val)
 ptr  pico_sb_to_string(ptr sb)
-i32  pico_sb_length(ptr sb)
+i64  pico_sb_length(ptr sb)
 void pico_sb_clear(ptr sb)
 ```
 
@@ -594,10 +653,48 @@ void pico_sb_clear(ptr sb)
 ```
 ptr  pico_file_read(ptr path)
 void pico_file_write(ptr path, ptr data)
-i32  pico_file_exists(ptr path)
-i32  pico_file_is_file(ptr path)
-i32  pico_file_is_dir(ptr path)
+i64  pico_file_exists(ptr path)
+i64  pico_file_is_file(ptr path)
+i64  pico_file_is_dir(ptr path)
 ```
+
+### Value runtime functions
+
+```
+ptr  pico_value_none()
+ptr  pico_value_from_int(i64 val)
+ptr  pico_value_from_bool(i64 val)
+ptr  pico_value_from_float(double val)
+ptr  pico_value_from_string(ptr val)
+ptr  pico_value_from_object(ptr val)
+i64  pico_value_tag(ptr val)
+i64  pico_value_as_int(ptr val)
+i64  pico_value_as_bool(ptr val)
+double pico_value_as_float(ptr val)
+ptr  pico_value_as_string(ptr val)
+ptr  pico_value_as_object(ptr val)
+```
+
+Tag constants: `NULL=0`, `INT=1`, `BOOL=2`, `FLOAT=3`, `STRING=4`, `OBJECT=5`.
+
+The `as_*` accessors panic (Rust) or throw (PHP) on tag mismatch. This catches type errors immediately rather than producing undefined behavior from misinterpreted bits.
+
+### Regex runtime functions (Rust-only)
+
+Compiled regex support for tokenizer patterns. All matching is anchored — the pattern must match at position 0 of the haystack starting from the given offset.
+
+```
+ptr  pico_regex_compile(ptr pattern)
+void pico_regex_free(ptr compiled)
+i64  pico_regex_exec(ptr compiled, ptr subject, i64 offset)
+ptr  pico_regex_exec_str(ptr compiled, ptr subject, i64 offset)
+ptr  pico_regex_exec_groups(ptr compiled, ptr subject, i64 offset)
+i64  pico_regex_match(ptr pattern, ptr subject, i64 offset)
+ptr  pico_regex_match_str(ptr pattern, ptr subject, i64 offset)
+ptr  pico_regex_match_groups(ptr pattern, ptr subject, i64 offset)
+```
+
+`pico_regex_compile` returns an opaque pointer to a compiled pattern. Compile once, match many times. `pico_regex_exec` returns the match length or -1. The `_str` variants return the matched text. The `_groups` variants return a `Collection` of capture group strings. The `pico_regex_match*` functions are one-shot conveniences that compile, match, and free in one call.
 
 ## Escape Analysis Summaries for Runtime
 
@@ -614,19 +711,30 @@ The escape analysis pass maintains hardcoded summaries for all runtime functions
 | `StringBuilder::append` | ArgEscape (mutated) | NoEscape (data copied) | — |
 | `StringBuilder::toString` | NoEscape | — | GlobalEscape (new string) |
 | `File::*` | — (static) | NoEscape | GlobalEscape (returned) |
+| `Value::from*` | — (static) | NoEscape (copied into bits) | GlobalEscape (returned) |
+| `Value::as*` | NoEscape (read-only) | — | GlobalEscape (extracted value) |
 
 ## Self-Hosting Path
 
 1. **Implement the Pico runtime** in Rust (native) and PHP (reference). The PHP implementation is a real working library — `Collection` implements `ArrayAccess`, bracket syntax works, code runs under `php` directly.
 2. **Port the tokenizer** to use `Remodulate\Pico\PicoString` and `Remodulate\Pico\Collection` — no `token_get_all`. Array syntax works naturally via `ArrayAccess`.
-3. **Port the parser** (nikic's, or the hand-written grammar output) to use `Remodulate\Pico\Collection` for AST nodes, token streams, and internal state. Bracket syntax means minimal code changes from the original.
+3. **Port the parser** (nikic's, or the hand-written grammar output) to use `Remodulate\Pico\Collection` for AST nodes, token streams, and internal state. The semantic value stack uses `Collection<Value>` to hold both tokens and nodes. Bracket syntax means minimal code changes from the original.
 4. **Port the compiler** (`SemanticAnalysisPass`, `IRGenerationPass`, `Builder`) to use `Remodulate\Pico\*` classes for symbol tables, class registries, and output generation.
 5. **Bootstrap test:** compile the compiler with itself, run the compiled compiler on its own source, verify IR output matches (fixed-point test).
 6. **Remove Rust runtime dependency** (optional, long-term): rewrite the Pico runtime in the Pico dialect itself, compile it with picohp. The compiler and its runtime are fully self-contained.
 
 ## Versioning
 
-This is version 0.2 of the Pico specification.
+This is version 0.3 of the Pico specification.
+
+Changes from v0.2:
+- `int` is now `i64` (pointer-sized) instead of `i32` — eliminates truncation/extension in int↔ptr conversions, removes artificial 2GB index limits, and unifies the ABI to a single integer width
+- All FFI functions use `i64` for integer parameters and returns, including booleans
+- Object struct field 0 (`type_id`) is now `i64`
+- Added `Value` class for tagged heterogeneous storage — supports NULL, INT, BOOL, FLOAT, STRING, OBJECT tags with runtime-checked accessors
+- Added regex runtime functions (`pico_regex_compile`, `pico_regex_exec`, etc.) for tokenizer support
+- Added `pico_string_format` for `{}` placeholder string formatting
+- Added `pico_collection_join` for joining string collections
 
 Changes from v0.1:
 - `Collection` now implements `ArrayAccess` and `Countable` — bracket syntax is standard PHP, not a custom lowering
@@ -637,4 +745,4 @@ Changes from v0.1:
 - Added usage examples showing how source code and compiler lowering relate
 - Added `pico_collection_valid_index`, `pico_collection_last_*`, `pico_collection_index_of_*`, `pico_collection_contains_*` runtime functions
 
-The runtime surface is intentionally minimal. Classes may be added (regex, process execution, etc.) but the core four — `PicoString`, `StringBuilder`, `Collection`, `File` — are the stable foundation. Specialized collection types (`IntArray` with contiguous `i32` storage) may be added as performance optimizations when profiling identifies hot paths, but `Collection` remains the default.
+The runtime surface is intentionally minimal. The core classes — `PicoString`, `StringBuilder`, `Collection`, `File`, `Value` — are the stable foundation. Specialized collection types (`IntArray` with contiguous `i64` storage) may be added as performance optimizations when profiling identifies hot paths, but `Collection` remains the default.

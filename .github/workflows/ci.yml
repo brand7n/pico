@@ -26,7 +26,7 @@ jobs:
         run: php test.php
 
   rust:
-    name: Rust build & test
+    name: Rust build & tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,28 +35,14 @@ jobs:
 
       - name: Build
         working-directory: rust
-        run: cargo build
+        run: cargo build --release
 
-      - name: Test
+      - name: Unit tests
         working-directory: rust
         run: cargo test
 
-  ffi:
-    name: C FFI test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Build runtime
+      - name: FFI test
         working-directory: rust
-        run: cargo build --release
-
-      - name: Compile FFI test
-        working-directory: rust
-        run: cc -o test_ffi test_ffi.c -Ltarget/release -lpico_runtime -lpthread -ldl -lm
-
-      - name: Run FFI test
-        working-directory: rust
-        run: ./test_ffi
+        run: |
+          cc -o test_ffi test_ffi.c -Ltarget/release -lpico_runtime -lpthread -ldl -lm
+          ./test_ffi
