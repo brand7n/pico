@@ -11,63 +11,80 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <math.h>
 
 /* ── String functions ─────────────────────────────────────────────── */
-extern int    pico_string_length(const char *s);
-extern int    pico_string_char_at(const char *s, int index);
-extern char  *pico_string_substring(const char *s, int start, int length);
-extern int    pico_string_index_of(const char *s, const char *needle, int offset);
-extern int    pico_string_starts_with(const char *s, const char *prefix);
-extern int    pico_string_ends_with(const char *s, const char *suffix);
-extern int    pico_string_contains(const char *s, const char *needle);
-extern char  *pico_string_concat(const char *a, const char *b);
-extern int    pico_string_equals(const char *a, const char *b);
-extern char  *pico_string_trim(const char *s);
-extern char  *pico_string_to_lower(const char *s);
-extern char  *pico_string_to_upper(const char *s);
-extern char  *pico_string_replace(const char *s, const char *search, const char *replace);
-extern int    pico_string_to_int(const char *s);
-extern char  *pico_int_to_string(int val);
-extern char  *pico_float_to_string(double val);
+extern int64_t pico_string_length(const char *s);
+extern int64_t pico_string_char_at(const char *s, int64_t index);
+extern char   *pico_string_substring(const char *s, int64_t start, int64_t length);
+extern int64_t pico_string_index_of(const char *s, const char *needle, int64_t offset);
+extern int64_t pico_string_starts_with(const char *s, const char *prefix);
+extern int64_t pico_string_ends_with(const char *s, const char *suffix);
+extern int64_t pico_string_contains(const char *s, const char *needle);
+extern char   *pico_string_concat(const char *a, const char *b);
+extern int64_t pico_string_equals(const char *a, const char *b);
+extern char   *pico_string_trim(const char *s);
+extern char   *pico_string_to_lower(const char *s);
+extern char   *pico_string_to_upper(const char *s);
+extern char   *pico_string_replace(const char *s, const char *search, const char *replace);
+extern int64_t pico_string_to_int(const char *s);
+extern char   *pico_int_to_string(int64_t val);
+extern char   *pico_float_to_string(double val);
 
 /* ── Collection functions ─────────────────────────────────────────── */
 typedef void PicoCollection;
 extern PicoCollection *pico_collection_new(void);
-extern int   pico_collection_count(PicoCollection *col);
-extern void  pico_collection_push_int(PicoCollection *col, int val);
-extern void  pico_collection_push_str(PicoCollection *col, char *val);
-extern void  pico_collection_push_ptr(PicoCollection *col, void *val);
-extern int   pico_collection_get_int_at(PicoCollection *col, int index);
-extern char *pico_collection_get_str_at(PicoCollection *col, int index);
-extern void *pico_collection_get_ptr_at(PicoCollection *col, int index);
-extern void  pico_collection_set_int_at(PicoCollection *col, int index, int val);
-extern int   pico_collection_pop_int(PicoCollection *col);
-extern int   pico_collection_last_int(PicoCollection *col);
-extern void  pico_collection_set_int(PicoCollection *col, const char *key, int val);
-extern int   pico_collection_get_int(PicoCollection *col, const char *key);
-extern int   pico_collection_has(PicoCollection *col, const char *key);
-extern char *pico_collection_key_at(PicoCollection *col, int index);
-extern int   pico_collection_valid_index(PicoCollection *col, int index);
-extern int   pico_collection_index_of_int(PicoCollection *col, int needle);
-extern int   pico_collection_contains_int(PicoCollection *col, int needle);
-extern PicoCollection *pico_collection_slice(PicoCollection *col, int start, int len);
-extern char *pico_collection_join(PicoCollection *col, const char *delimiter);
+extern int64_t pico_collection_count(PicoCollection *col);
+extern void    pico_collection_push_int(PicoCollection *col, int64_t val);
+extern void    pico_collection_push_str(PicoCollection *col, char *val);
+extern void    pico_collection_push_ptr(PicoCollection *col, void *val);
+extern int64_t pico_collection_get_int_at(PicoCollection *col, int64_t index);
+extern char   *pico_collection_get_str_at(PicoCollection *col, int64_t index);
+extern void   *pico_collection_get_ptr_at(PicoCollection *col, int64_t index);
+extern void    pico_collection_set_int_at(PicoCollection *col, int64_t index, int64_t val);
+extern int64_t pico_collection_pop_int(PicoCollection *col);
+extern int64_t pico_collection_last_int(PicoCollection *col);
+extern void    pico_collection_set_int(PicoCollection *col, const char *key, int64_t val);
+extern int64_t pico_collection_get_int(PicoCollection *col, const char *key);
+extern int64_t pico_collection_has(PicoCollection *col, const char *key);
+extern char   *pico_collection_key_at(PicoCollection *col, int64_t index);
+extern int64_t pico_collection_valid_index(PicoCollection *col, int64_t index);
+extern int64_t pico_collection_index_of_int(PicoCollection *col, int64_t needle);
+extern int64_t pico_collection_contains_int(PicoCollection *col, int64_t needle);
+extern PicoCollection *pico_collection_slice(PicoCollection *col, int64_t start, int64_t len);
+extern char   *pico_collection_join(PicoCollection *col, const char *delimiter);
 
 /* ── Regex functions ──────────────────────────────────────────────── */
 typedef void CompiledRegex;
 extern CompiledRegex *pico_regex_compile(const char *pattern);
-extern void  pico_regex_free(CompiledRegex *compiled);
-extern int   pico_regex_exec(CompiledRegex *compiled, const char *subject, int offset);
-extern char *pico_regex_exec_str(CompiledRegex *compiled, const char *subject, int offset);
-extern int   pico_regex_match(const char *pattern, const char *subject, int offset);
+extern void    pico_regex_free(CompiledRegex *compiled);
+extern int64_t pico_regex_exec(CompiledRegex *compiled, const char *subject, int64_t offset);
+extern char   *pico_regex_exec_str(CompiledRegex *compiled, const char *subject, int64_t offset);
+extern int64_t pico_regex_match(const char *pattern, const char *subject, int64_t offset);
+
+/* ── Value functions ──────────────────────────────────────────────── */
+typedef void PicoValue;
+extern PicoValue *pico_value_none(void);
+extern PicoValue *pico_value_from_int(int64_t val);
+extern PicoValue *pico_value_from_bool(int64_t val);
+extern PicoValue *pico_value_from_float(double val);
+extern PicoValue *pico_value_from_string(char *val);
+extern PicoValue *pico_value_from_object(void *val);
+extern int64_t    pico_value_tag(const PicoValue *val);
+extern int64_t    pico_value_as_int(const PicoValue *val);
+extern int64_t    pico_value_as_bool(const PicoValue *val);
+extern double     pico_value_as_float(const PicoValue *val);
+extern char      *pico_value_as_string(const PicoValue *val);
+extern void      *pico_value_as_object(const PicoValue *val);
 
 /* ── File functions ───────────────────────────────────────────────── */
-extern int   pico_file_exists(const char *path);
-extern int   pico_file_is_dir(const char *path);
+extern int64_t pico_file_exists(const char *path);
+extern int64_t pico_file_is_dir(const char *path);
 
 /* ── Alloc ────────────────────────────────────────────────────────── */
-extern void *picohp_object_alloc(long long size, int type_id);
-extern int   pico_rt_version(void);
+extern void   *picohp_object_alloc(uint64_t size, int64_t type_id);
+extern int64_t pico_rt_version(void);
 
 /* ── Test harness ─────────────────────────────────────────────────── */
 static int passed = 0;
@@ -85,7 +102,7 @@ static void check(const char *name, int condition) {
 
 int main(void) {
     printf("═══ Runtime version ═══\n\n");
-    check("pico_rt_version() == 2", pico_rt_version() == 2);
+    check("pico_rt_version() == 3", pico_rt_version() == 3);
 
     printf("\n═══ String: length / charAt ═══\n\n");
     check("length('hello') == 5", pico_string_length("hello") == 5);
@@ -145,7 +162,7 @@ int main(void) {
     pico_collection_set_int_at(c, 1, 99);
     check("setAt(1, 99), getAt(1) == 99", pico_collection_get_int_at(c, 1) == 99);
     check("last == 30", pico_collection_last_int(c) == 30);
-    int popped = pico_collection_pop_int(c);
+    int64_t popped = pico_collection_pop_int(c);
     check("pop == 30", popped == 30);
     check("after pop, count == 2", pico_collection_count(c) == 2);
 
@@ -201,9 +218,8 @@ int main(void) {
     pico_regex_free(re);
 
     printf("\n═══ Regex: tokenizer pattern ═══\n\n");
-    /* Simulates the tokenizer's \G-anchored cursor-based matching */
     const char *source = "function main() { return 42; }";
-    int cursor = 0;
+    int64_t cursor = 0;
 
     CompiledRegex *re_id = pico_regex_compile("[a-zA-Z_][a-zA-Z0-9_]*");
     CompiledRegex *re_num = pico_regex_compile("[0-9]+");
@@ -211,30 +227,65 @@ int main(void) {
     CompiledRegex *re_sym = pico_regex_compile("[(){}=;]");
 
     int token_count = 0;
-    int len = strlen(source);
+    int64_t len = strlen(source);
     while (cursor < len) {
-        int m;
-        if ((m = pico_regex_exec(re_ws, source, cursor)) > 0) {
-            cursor += m; /* skip whitespace */
-        } else if ((m = pico_regex_exec(re_id, source, cursor)) > 0) {
-            cursor += m; token_count++;
-        } else if ((m = pico_regex_exec(re_num, source, cursor)) > 0) {
-            cursor += m; token_count++;
-        } else if ((m = pico_regex_exec(re_sym, source, cursor)) > 0) {
-            cursor += m; token_count++;
+        int64_t mt;
+        if ((mt = pico_regex_exec(re_ws, source, cursor)) > 0) {
+            cursor += mt;
+        } else if ((mt = pico_regex_exec(re_id, source, cursor)) > 0) {
+            cursor += mt; token_count++;
+        } else if ((mt = pico_regex_exec(re_num, source, cursor)) > 0) {
+            cursor += mt; token_count++;
+        } else if ((mt = pico_regex_exec(re_sym, source, cursor)) > 0) {
+            cursor += mt; token_count++;
         } else {
-            cursor++; /* skip unknown */
+            cursor++;
         }
     }
-    check("tokenized 'function main() { return 42; }' → 9 tokens", token_count == 9);
+    check("tokenized 'function main() { return 42; }' -> 9 tokens", token_count == 9);
     pico_regex_free(re_id);
     pico_regex_free(re_num);
     pico_regex_free(re_ws);
     pico_regex_free(re_sym);
 
+    printf("\n═══ Value ═══\n\n");
+    PicoValue *vn = pico_value_none();
+    check("value_none tag == 0", pico_value_tag(vn) == 0);
+
+    PicoValue *vi = pico_value_from_int(42);
+    check("value_from_int tag == 1", pico_value_tag(vi) == 1);
+    check("value_as_int == 42", pico_value_as_int(vi) == 42);
+
+    PicoValue *vb = pico_value_from_bool(1);
+    check("value_from_bool tag == 2", pico_value_tag(vb) == 2);
+    check("value_as_bool == 1", pico_value_as_bool(vb) == 1);
+
+    PicoValue *vf = pico_value_from_float(3.14);
+    check("value_from_float tag == 3", pico_value_tag(vf) == 3);
+    check("value_as_float ~= 3.14", fabs(pico_value_as_float(vf) - 3.14) < 0.001);
+
+    PicoValue *vs = pico_value_from_string("hello");
+    check("value_from_string tag == 4", pico_value_tag(vs) == 4);
+    check("value_as_string == 'hello'", strcmp(pico_value_as_string(vs), "hello") == 0);
+
+    /* Use a collection as an opaque "object" pointer */
+    PicoCollection *obj = pico_collection_new();
+    PicoValue *vo = pico_value_from_object(obj);
+    check("value_from_object tag == 5", pico_value_tag(vo) == 5);
+    check("value_as_object round-trips", pico_value_as_object(vo) == obj);
+
+    /* Value in a collection (parser stack pattern) */
+    PicoCollection *stack = pico_collection_new();
+    pico_collection_push_ptr(stack, vi);
+    pico_collection_push_ptr(stack, vs);
+    pico_collection_push_ptr(stack, vn);
+    check("stack count == 3", pico_collection_count(stack) == 3);
+    PicoValue *top = (PicoValue *)pico_collection_get_ptr_at(stack, 0);
+    check("stack[0] tag == INT", pico_value_tag(top) == 1);
+    check("stack[0] as_int == 42", pico_value_as_int(top) == 42);
+
     printf("\n═══ Object allocation ═══\n\n");
-    /* Simulate: struct Point { i32 type_id; i32 x; i32 y; } */
-    int *point = (int *)picohp_object_alloc(12, 1);
+    int64_t *point = (int64_t *)picohp_object_alloc(24, 1);
     check("alloc returns non-null", point != NULL);
     check("zeroed memory", point[0] == 0 && point[1] == 0 && point[2] == 0);
     point[0] = 1;   /* type_id */

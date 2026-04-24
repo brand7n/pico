@@ -29,28 +29,28 @@ pub unsafe extern "C" fn pico_file_write(path: *const c_char, data: *const c_cha
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn pico_file_exists(path: *const c_char) -> i32 {
+pub unsafe extern "C" fn pico_file_exists(path: *const c_char) -> i64 {
     let path_str = match CStr::from_ptr(path).to_str() {
         Ok(s) => s,
         Err(_) => return 0,
     };
-    std::path::Path::new(path_str).exists() as i32
+    std::path::Path::new(path_str).exists() as i64
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn pico_file_is_file(path: *const c_char) -> i32 {
+pub unsafe extern "C" fn pico_file_is_file(path: *const c_char) -> i64 {
     let path_str = match CStr::from_ptr(path).to_str() {
         Ok(s) => s,
         Err(_) => return 0,
     };
-    std::path::Path::new(path_str).is_file() as i32
+    std::path::Path::new(path_str).is_file() as i64
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn pico_file_is_dir(path: *const c_char) -> i32 {
+pub unsafe extern "C" fn pico_file_is_dir(path: *const c_char) -> i64 {
     let path_str = match CStr::from_ptr(path).to_str() {
         Ok(s) => s,
         Err(_) => return 0,
     };
-    std::path::Path::new(path_str).is_dir() as i32
+    std::path::Path::new(path_str).is_dir() as i64
 }

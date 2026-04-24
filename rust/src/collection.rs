@@ -5,6 +5,9 @@ use std::os::raw::c_char;
 /// Internal value storage. Every value is stored as 64 bits.
 /// The caller (compiler-generated code) knows the type and calls
 /// the appropriate get/set function.
+///
+/// With Pico int = i64, int and ptr are both 64 bits — from_int/as_int
+/// are identity operations (no truncation or extension).
 #[derive(Clone, Copy, Default)]
 #[repr(C)]
 struct Slot {
@@ -12,14 +15,14 @@ struct Slot {
 }
 
 impl Slot {
-    fn from_int(v: i32) -> Self {
+    fn from_int(v: i64) -> Self {
         Slot { bits: v as u64 }
     }
     fn from_ptr(v: *mut u8) -> Self {
         Slot { bits: v as u64 }
     }
-    fn as_int(self) -> i32 {
-        self.bits as i32
+    fn as_int(self) -> i64 {
+        self.bits as i64
     }
     fn as_ptr(self) -> *mut u8 {
         self.bits as *mut u8
@@ -54,7 +57,7 @@ impl PicoCollection {
         }
     }
 
-    pub fn push_int(&mut self, val: i32) {
+    pub fn push_int(&mut self, val: i64) {
         self.seq.push(Slot::from_int(val));
     }
 
@@ -73,11 +76,11 @@ pub extern "C" fn pico_collection_new() -> *mut PicoCollection {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn pico_collection_count(col: *mut PicoCollection) -> i32 {
+pub unsafe extern "C" fn pico_collection_count(col: *mut PicoCollection) -> i64 {
     if col.is_null() {
         return 0;
     }
-    ((*col).seq.len() + (*col).map.len()) as i32
+    ((*col).seq.len() + (*col).map.len()) as i64
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -85,7 +88,7 @@ pub unsafe extern "C" fn pico_collection_count(col: *mut PicoCollection) -> i32 
 // ═══════════════════════════════════════════════════════════════════
 
 #[no_mangle]
-pub unsafe extern "C" fn pico_collection_push_int(col: *mut PicoCollection, val: i32) {
+pub unsafe extern "C" fn pico_collection_push_int(col: *mut PicoCollection, val: i64) {
     (*col).seq.push(Slot::from_int(val));
 }
 
@@ -104,10 +107,11 @@ pub unsafe extern "C" fn pico_collection_push_ptr(col: *mut PicoCollection, val:
 // ═══════════════════════════════════════════════════════════════════
 
 #[no_mangle]
-pub unsafe extern "C" fn pico_collection_get_int_at(col: *mut PicoCollection, index: i32) -> i32 {
+pub unsafe extern "C" fn pico_collection_get_int_at(col: *mut PicoCollection, index: i64) -> i64 {
+    let c = &*col;
     let i = index as usize;
-    if i < (*col).seq.len() {
-        (*col).seq[i].as_int()
+    if i < c.seq.len() {
+        c.seq[i].as_int()
     } else {
         0
     }
@@ -116,11 +120,12 @@ pub unsafe extern "C" fn pico_collection_get_int_at(col: *mut PicoCollection, in
 #[no_mangle]
 pub unsafe extern "C" fn pico_collection_get_str_at(
     col: *mut PicoCollection,
-    index: i32,
+    index: i64,
 ) -> *mut c_char {
+    let c = &*col;
     let i = index as usize;
-    if i < (*col).seq.len() {
-        (*col).seq[i].as_ptr() as *mut c_char
+    if i < c.seq.len() {
+        c.seq[i].as_ptr() as *mut c_char
     } else {
         std::ptr::null_mut()
     }
@@ -129,11 +134,12 @@ pub unsafe extern "C" fn pico_collection_get_str_at(
 #[no_mangle]
 pub unsafe extern "C" fn pico_collection_get_ptr_at(
     col: *mut PicoCollection,
-    index: i32,
+    index: i64,
 ) -> *mut u8 {
+    let c = &*col;
     let i = index as usize;
-    if i < (*col).seq.len() {
-        (*col).seq[i].as_ptr()
+    if i < c.seq.len() {
+        c.seq[i].as_ptr()
     } else {
         std::ptr::null_mut()
     }
@@ -146,41 +152,44 @@ pub unsafe extern "C" fn pico_collection_get_ptr_at(
 #[no_mangle]
 pub unsafe extern "C" fn pico_collection_set_int_at(
     col: *mut PicoCollection,
-    index: i32,
-    val: i32,
+    index: i64,
+    val: i64,
 ) {
+    let c = &mut *col;
     let i = index as usize;
     // Extend if necessary
-    while (*col).seq.len() <= i {
-        (*col).seq.push(Slot::default());
+    while c.seq.len() <= i {
+        c.seq.push(Slot::default());
     }
-    (*col).seq[i] = Slot::from_int(val);
+    c.seq[i] = Slot::from_int(val);
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn pico_collection_set_str_at(
     col: *mut PicoCollection,
-    index: i32,
+    index: i64,
     val: *mut c_char,
 ) {
+    let c = &mut *col;
     let i = index as usize;
-    while (*col).seq.len() <= i {
-        (*col).seq.push(Slot::default());
+    while c.seq.len() <= i {
+        c.seq.push(Slot::default());
     }
-    (*col).seq[i] = Slot::from_ptr(val as *mut u8);
+    c.seq[i] = Slot::from_ptr(val as *mut u8);
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn pico_collection_set_ptr_at(
     col: *mut PicoCollection,
-    index: i32,
+    index: i64,
     val: *mut u8,
 ) {
+    let c = &mut *col;
     let i = index as usize;
-    while (*col).seq.len() <= i {
-        (*col).seq.push(Slot::default());
+    while c.seq.len() <= i {
+        c.seq.push(Slot::default());
     }
-    (*col).seq[i] = Slot::from_ptr(val);
+    c.seq[i] = Slot::from_ptr(val);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -188,7 +197,7 @@ pub unsafe extern "C" fn pico_collection_set_ptr_at(
 // ═══════════════════════════════════════════════════════════════════
 
 #[no_mangle]
-pub unsafe extern "C" fn pico_collection_pop_int(col: *mut PicoCollection) -> i32 {
+pub unsafe extern "C" fn pico_collection_pop_int(col: *mut PicoCollection) -> i64 {
     (*col).seq.pop().map(|s| s.as_int()).unwrap_or(0)
 }
 
@@ -211,7 +220,7 @@ pub unsafe extern "C" fn pico_collection_pop_ptr(col: *mut PicoCollection) -> *m
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn pico_collection_last_int(col: *mut PicoCollection) -> i32 {
+pub unsafe extern "C" fn pico_collection_last_int(col: *mut PicoCollection) -> i64 {
     (*col).seq.last().map(|s| s.as_int()).unwrap_or(0)
 }
 
@@ -245,7 +254,7 @@ unsafe fn key_str(key: *const c_char) -> String {
 pub unsafe extern "C" fn pico_collection_get_int(
     col: *mut PicoCollection,
     key: *const c_char,
-) -> i32 {
+) -> i64 {
     let k = key_str(key);
     (*col).map.get(&k).map(|s| s.as_int()).unwrap_or(0)
 }
@@ -284,7 +293,7 @@ pub unsafe extern "C" fn pico_collection_get_ptr(
 pub unsafe extern "C" fn pico_collection_set_int(
     col: *mut PicoCollection,
     key: *const c_char,
-    val: i32,
+    val: i64,
 ) {
     let k = key_str(key);
     if !(*col).map.contains_key(&k) {
@@ -327,19 +336,20 @@ pub unsafe extern "C" fn pico_collection_set_ptr(
 pub unsafe extern "C" fn pico_collection_has(
     col: *mut PicoCollection,
     key: *const c_char,
-) -> i32 {
+) -> i64 {
     let k = key_str(key);
-    (*col).map.contains_key(&k) as i32
+    (*col).map.contains_key(&k) as i64
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn pico_collection_key_at(
     col: *mut PicoCollection,
-    index: i32,
+    index: i64,
 ) -> *mut c_char {
     let i = index as usize;
-    if i < (*col).key_order.len() {
-        std::ffi::CString::new((*col).key_order[i].as_str())
+    let c = &*col;
+    if i < c.key_order.len() {
+        std::ffi::CString::new(c.key_order[i].as_str())
             .unwrap_or_default()
             .into_raw()
     } else {
@@ -354,20 +364,20 @@ pub unsafe extern "C" fn pico_collection_key_at(
 #[no_mangle]
 pub unsafe extern "C" fn pico_collection_valid_index(
     col: *mut PicoCollection,
-    index: i32,
-) -> i32 {
+    index: i64,
+) -> i64 {
     let i = index as usize;
-    (index >= 0 && i < (*col).seq.len()) as i32
+    (index >= 0 && i < (*col).seq.len()) as i64
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn pico_collection_index_of_int(
     col: *mut PicoCollection,
-    needle: i32,
-) -> i32 {
+    needle: i64,
+) -> i64 {
     for (i, slot) in (*col).seq.iter().enumerate() {
         if slot.as_int() == needle {
-            return i as i32;
+            return i as i64;
         }
     }
     -1
@@ -377,12 +387,12 @@ pub unsafe extern "C" fn pico_collection_index_of_int(
 pub unsafe extern "C" fn pico_collection_index_of_str(
     col: *mut PicoCollection,
     needle: *const c_char,
-) -> i32 {
+) -> i64 {
     let needle_bytes = CStr::from_ptr(needle).to_bytes();
     for (i, slot) in (*col).seq.iter().enumerate() {
         let ptr = slot.as_ptr() as *const c_char;
         if !ptr.is_null() && CStr::from_ptr(ptr).to_bytes() == needle_bytes {
-            return i as i32;
+            return i as i64;
         }
     }
     -1
@@ -391,17 +401,17 @@ pub unsafe extern "C" fn pico_collection_index_of_str(
 #[no_mangle]
 pub unsafe extern "C" fn pico_collection_contains_int(
     col: *mut PicoCollection,
-    needle: i32,
-) -> i32 {
-    (pico_collection_index_of_int(col, needle) >= 0) as i32
+    needle: i64,
+) -> i64 {
+    (pico_collection_index_of_int(col, needle) >= 0) as i64
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn pico_collection_contains_str(
     col: *mut PicoCollection,
     needle: *const c_char,
-) -> i32 {
-    (pico_collection_index_of_str(col, needle) >= 0) as i32
+) -> i64 {
+    (pico_collection_index_of_str(col, needle) >= 0) as i64
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -411,8 +421,8 @@ pub unsafe extern "C" fn pico_collection_contains_str(
 #[no_mangle]
 pub unsafe extern "C" fn pico_collection_slice(
     col: *mut PicoCollection,
-    start: i32,
-    length: i32,
+    start: i64,
+    length: i64,
 ) -> *mut PicoCollection {
     let result = Box::into_raw(Box::new(PicoCollection::new()));
     let s = start.max(0) as usize;

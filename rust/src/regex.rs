@@ -44,8 +44,8 @@ pub unsafe extern "C" fn pico_regex_free(compiled: *mut CompiledRegex) {
 pub unsafe extern "C" fn pico_regex_exec(
     compiled: *mut CompiledRegex,
     subject: *const c_char,
-    offset: i32,
-) -> i32 {
+    offset: i64,
+) -> i64 {
     if compiled.is_null() || subject.is_null() {
         return -1;
     }
@@ -62,7 +62,7 @@ pub unsafe extern "C" fn pico_regex_exec(
 
     let haystack = &subject_str[start..];
     match (*compiled).re.find(haystack) {
-        Some(m) if m.start() == 0 => m.len() as i32,
+        Some(m) if m.start() == 0 => m.len() as i64,
         _ => -1,
     }
 }
@@ -72,7 +72,7 @@ pub unsafe extern "C" fn pico_regex_exec(
 pub unsafe extern "C" fn pico_regex_exec_str(
     compiled: *mut CompiledRegex,
     subject: *const c_char,
-    offset: i32,
+    offset: i64,
 ) -> *mut c_char {
     if compiled.is_null() || subject.is_null() {
         return std::ptr::null_mut();
@@ -103,7 +103,7 @@ pub unsafe extern "C" fn pico_regex_exec_str(
 pub unsafe extern "C" fn pico_regex_exec_groups(
     compiled: *mut CompiledRegex,
     subject: *const c_char,
-    offset: i32,
+    offset: i64,
 ) -> *mut crate::collection::PicoCollection {
     if compiled.is_null() || subject.is_null() {
         return std::ptr::null_mut();
@@ -160,8 +160,8 @@ pub unsafe extern "C" fn pico_regex_exec_groups(
 pub unsafe extern "C" fn pico_regex_match(
     pattern: *const c_char,
     subject: *const c_char,
-    offset: i32,
-) -> i32 {
+    offset: i64,
+) -> i64 {
     let compiled = pico_regex_compile(pattern);
     if compiled.is_null() {
         return -1;
@@ -176,7 +176,7 @@ pub unsafe extern "C" fn pico_regex_match(
 pub unsafe extern "C" fn pico_regex_match_str(
     pattern: *const c_char,
     subject: *const c_char,
-    offset: i32,
+    offset: i64,
 ) -> *mut c_char {
     let compiled = pico_regex_compile(pattern);
     if compiled.is_null() {
@@ -192,7 +192,7 @@ pub unsafe extern "C" fn pico_regex_match_str(
 pub unsafe extern "C" fn pico_regex_match_groups(
     pattern: *const c_char,
     subject: *const c_char,
-    offset: i32,
+    offset: i64,
 ) -> *mut crate::collection::PicoCollection {
     let compiled = pico_regex_compile(pattern);
     if compiled.is_null() {

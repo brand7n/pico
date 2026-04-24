@@ -7,7 +7,7 @@ use std::alloc::{Layout, alloc_zeroed};
 /// malloc-style allocator. A tracing GC can replace this later — the
 /// interface stays the same.
 #[no_mangle]
-pub unsafe extern "C" fn picohp_object_alloc(size: u64, _type_id: i32) -> *mut u8 {
+pub unsafe extern "C" fn picohp_object_alloc(size: u64, _type_id: i64) -> *mut u8 {
     let size = size.max(8) as usize; // minimum 8 bytes (one field)
     let align = 8; // 8-byte alignment for all structs
 
@@ -27,6 +27,6 @@ pub unsafe extern "C" fn picohp_object_alloc(size: u64, _type_id: i32) -> *mut u
 
 /// Runtime version — can be used by compiled programs to check compatibility.
 #[no_mangle]
-pub extern "C" fn pico_rt_version() -> i32 {
-    2 // v0.2 — matches spec version
+pub extern "C" fn pico_rt_version() -> i64 {
+    3 // v0.3 — int is now i64 (pointer-sized), added Value type
 }

@@ -13,8 +13,9 @@ require_once __DIR__ . '/src/PicoString.php';
 require_once __DIR__ . '/src/Collection.php';
 require_once __DIR__ . '/src/StringBuilder.php';
 require_once __DIR__ . '/src/File.php';
+require_once __DIR__ . '/src/Value.php';
 
-use Remodulate\Pico\{Collection, PicoString, StringBuilder};
+use Remodulate\Pico\{Collection, PicoString, StringBuilder, Value};
 
 $passed = 0;
 $failed = 0;
@@ -230,6 +231,78 @@ check('lookup by name', $symbols['x']->type->equals(new PicoString('int')));
 check('has symbol', $symbols->has('point'));
 check('!has symbol', !$symbols->has('z'));
 check('symbol scope', $symbols['point']->scopeDepth === 1);
+
+echo "\n═══ Value: Constructors and accessors ═══\n\n";
+
+$vNull = Value::none();
+check('Value::none() tag', $vNull->tag() === Value::NULL);
+check('Value::none() isNull', $vNull->isNull());
+
+$vInt = Value::fromInt(42);
+check('Value::fromInt() tag', $vInt->tag() === Value::INT);
+check('Value::fromInt() asInt', $vInt->asInt() === 42);
+check('Value::fromInt() !isNull', !$vInt->isNull());
+
+$vBool = Value::fromBool(true);
+check('Value::fromBool() tag', $vBool->tag() === Value::BOOL);
+check('Value::fromBool() asBool', $vBool->asBool() === true);
+
+$vFloat = Value::fromFloat(3.14);
+check('Value::fromFloat() tag', $vFloat->tag() === Value::FLOAT);
+check('Value::fromFloat() asFloat', abs($vFloat->asFloat() - 3.14) < 0.001);
+
+$vStr = Value::fromString(new PicoString('hello'));
+check('Value::fromString() tag', $vStr->tag() === Value::STRING);
+check('Value::fromString() asString', $vStr->asString()->equals(new PicoString('hello')));
+
+$vObj = Value::fromObject(new Token(42, new PicoString('test'), 1));
+check('Value::fromObject() tag', $vObj->tag() === Value::OBJECT);
+check('Value::fromObject() asObject', $vObj->asObject() instanceof Token);
+check('Value::fromObject() asObject field', $vObj->asObject()->kind === 42);
+
+echo "\n═══ Value: Tag mismatch errors ═══\n\n";
+
+$caught = false;
+try {
+    $vInt->asString();
+} catch (\RuntimeException $e) {
+    $caught = true;
+}
+check('asString() on INT throws', $caught);
+
+$caught = false;
+try {
+    $vStr->asInt();
+} catch (\RuntimeException $e) {
+    $caught = true;
+}
+check('asInt() on STRING throws', $caught);
+
+$caught = false;
+try {
+    $vNull->asFloat();
+} catch (\RuntimeException $e) {
+    $caught = true;
+}
+check('asFloat() on NULL throws', $caught);
+
+echo "\n═══ Value: In Collection (parser stack simulation) ═══\n\n";
+
+/** @var Collection<Value> */
+$stack = new Collection();
+$stack->push(Value::fromInt(268));
+$stack->push(Value::fromString(new PicoString('function')));
+$stack->push(Value::fromObject(new Token(268, new PicoString('function'), 1)));
+$stack->push(Value::none());
+
+check('stack count', $stack->count() === 4);
+check('stack[0] is INT', $stack[0]->tag() === Value::INT);
+check('stack[0] asInt', $stack[0]->asInt() === 268);
+check('stack[1] is STRING', $stack[1]->tag() === Value::STRING);
+check('stack[1] asString', $stack[1]->asString()->equals(new PicoString('function')));
+check('stack[2] is OBJECT', $stack[2]->tag() === Value::OBJECT);
+check('stack[2] asObject', $stack[2]->asObject() instanceof Token);
+check('stack[3] isNull', $stack[3]->isNull());
 
 // ═══ Results ═══
 

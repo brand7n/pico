@@ -15,19 +15,19 @@ fn str_to_cstr(s: &str) -> *mut c_char {
 // ── Length / char access ───────────────────────────────────────────
 
 #[no_mangle]
-pub unsafe extern "C" fn pico_string_length(s: *const c_char) -> i32 {
+pub unsafe extern "C" fn pico_string_length(s: *const c_char) -> i64 {
     if s.is_null() {
         return 0;
     }
-    CStr::from_ptr(s).to_bytes().len() as i32
+    CStr::from_ptr(s).to_bytes().len() as i64
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn pico_string_char_at(s: *const c_char, index: i32) -> i32 {
+pub unsafe extern "C" fn pico_string_char_at(s: *const c_char, index: i64) -> i64 {
     let bytes = CStr::from_ptr(s).to_bytes();
     let i = index as usize;
     if i < bytes.len() {
-        bytes[i] as i32
+        bytes[i] as i64
     } else {
         -1
     }
@@ -38,8 +38,8 @@ pub unsafe extern "C" fn pico_string_char_at(s: *const c_char, index: i32) -> i3
 #[no_mangle]
 pub unsafe extern "C" fn pico_string_substring(
     s: *const c_char,
-    start: i32,
-    length: i32,
+    start: i64,
+    length: i64,
 ) -> *mut c_char {
     let src = cstr_to_str(s);
     let start = start.max(0) as usize;
@@ -68,8 +68,8 @@ pub unsafe extern "C" fn pico_string_substring(
 pub unsafe extern "C" fn pico_string_index_of(
     s: *const c_char,
     needle: *const c_char,
-    offset: i32,
-) -> i32 {
+    offset: i64,
+) -> i64 {
     let haystack = cstr_to_str(s);
     let needle = cstr_to_str(needle);
     let offset = offset.max(0) as usize;
@@ -79,7 +79,7 @@ pub unsafe extern "C" fn pico_string_index_of(
     }
 
     match haystack[offset..].find(needle) {
-        Some(pos) => (pos + offset) as i32,
+        Some(pos) => (pos + offset) as i64,
         None => -1,
     }
 }
@@ -88,30 +88,30 @@ pub unsafe extern "C" fn pico_string_index_of(
 pub unsafe extern "C" fn pico_string_starts_with(
     s: *const c_char,
     prefix: *const c_char,
-) -> i32 {
+) -> i64 {
     let s = cstr_to_str(s);
     let prefix = cstr_to_str(prefix);
-    s.starts_with(prefix) as i32
+    s.starts_with(prefix) as i64
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn pico_string_ends_with(
     s: *const c_char,
     suffix: *const c_char,
-) -> i32 {
+) -> i64 {
     let s = cstr_to_str(s);
     let suffix = cstr_to_str(suffix);
-    s.ends_with(suffix) as i32
+    s.ends_with(suffix) as i64
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn pico_string_contains(
     s: *const c_char,
     needle: *const c_char,
-) -> i32 {
+) -> i64 {
     let s = cstr_to_str(s);
     let needle = cstr_to_str(needle);
-    s.contains(needle) as i32
+    s.contains(needle) as i64
 }
 
 // ── Concat / Transform ────────────────────────────────────────────
@@ -133,7 +133,7 @@ pub unsafe extern "C" fn pico_string_concat(
 pub unsafe extern "C" fn pico_string_equals(
     a: *const c_char,
     b: *const c_char,
-) -> i32 {
+) -> i64 {
     if a.is_null() && b.is_null() {
         return 1;
     }
@@ -142,7 +142,7 @@ pub unsafe extern "C" fn pico_string_equals(
     }
     let a = CStr::from_ptr(a);
     let b = CStr::from_ptr(b);
-    (a == b) as i32
+    (a == b) as i64
 }
 
 #[no_mangle]
@@ -196,13 +196,13 @@ pub unsafe extern "C" fn pico_string_split(
 // ── Conversion ─────────────────────────────────────────────────────
 
 #[no_mangle]
-pub unsafe extern "C" fn pico_string_to_int(s: *const c_char) -> i32 {
+pub unsafe extern "C" fn pico_string_to_int(s: *const c_char) -> i64 {
     let s = cstr_to_str(s);
-    s.trim().parse::<i32>().unwrap_or(0)
+    s.trim().parse::<i64>().unwrap_or(0)
 }
 
 #[no_mangle]
-pub extern "C" fn pico_int_to_string(val: i32) -> *mut c_char {
+pub extern "C" fn pico_int_to_string(val: i64) -> *mut c_char {
     str_to_cstr(&val.to_string())
 }
 
@@ -224,7 +224,7 @@ pub extern "C" fn pico_float_to_string(val: f64) -> *mut c_char {
 pub unsafe extern "C" fn pico_string_format(
     template: *const c_char,
     args: *const *const c_char,
-    arg_count: i32,
+    arg_count: i64,
 ) -> *mut c_char {
     let template = cstr_to_str(template);
     let mut result = String::with_capacity(template.len() + 64);

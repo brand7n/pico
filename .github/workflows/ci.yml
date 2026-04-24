@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  php:
+    name: PHP tests & PHPStan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+
+      - run: composer install --no-interaction
+
+      - name: PHPStan
+        run: vendor/bin/phpstan analyse src/ --level=max
+
+      - name: Tests
+        run: php test.php
+
+  rust:
+    name: Rust build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        working-directory: rust
+        run: cargo build
+
+      - name: Test
+        working-directory: rust
+        run: cargo test
+
+  ffi:
+    name: C FFI test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build runtime
+        working-directory: rust
+        run: cargo build --release
+
+      - name: Compile FFI test
+        working-directory: rust
+        run: cc -o test_ffi test_ffi.c -Ltarget/release -lpico_runtime -lpthread -ldl -lm
+
+      - name: Run FFI test
+        working-directory: rust
+        run: ./test_ffi
