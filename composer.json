@@ -1,0 +1,17 @@
+{
+    "name": "remodulate/pico-runtime",
+    "description": "Minimal runtime for the picohp self-hosting compiler — Collection, PicoString, StringBuilder, File",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Remodulate\\Pico\\": "src/"
+        }
+    },
+    "require": {
+        "php": ">=8.2"
+    },
+    "require-dev": {
+        "phpstan/phpstan": "^1.0"
+    }
+}
