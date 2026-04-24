@@ -90,6 +90,7 @@ class Collection implements \ArrayAccess, \Countable
      */
     public function slice(int $start, int $length = -1): self
     {
+        /** @var self<T> $result */
         $result = new self();
         $values = array_values($this->data);
         $sliced = $length < 0
@@ -251,6 +252,7 @@ class Collection implements \ArrayAccess, \Countable
      */
     public static function from(array $items): self
     {
+        /** @var self<T> $c */
         $c = new self();
         foreach ($items as $key => $value) {
             if (is_int($key)) {
@@ -270,6 +272,7 @@ class Collection implements \ArrayAccess, \Countable
      */
     public static function of(mixed ...$values): self
     {
+        /** @var self<T> $c */
         $c = new self();
         foreach ($values as $v) {
             $c->push($v);

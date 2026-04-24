@@ -10,6 +10,7 @@ namespace Remodulate\Pico;
  * All operations that modify content return a new PicoString.
  * Supports bracket syntax for character access ($s[0] returns int byte value).
  */
+/** @implements \ArrayAccess<int, int> */
 class PicoString implements \ArrayAccess
 {
     public function __construct(
@@ -96,7 +97,12 @@ class PicoString implements \ArrayAccess
      */
     public function split(self $delimiter): Collection
     {
-        $parts = explode($delimiter->data, $this->data);
+        $delim = $delimiter->data;
+        if ($delim === '') {
+            throw new \RuntimeException('PicoString::split() — delimiter cannot be empty');
+        }
+        $parts = explode($delim, $this->data);
+        /** @var Collection<PicoString> $result */
         $result = new Collection();
         foreach ($parts as $part) {
             $result->push(new self($part));
@@ -127,7 +133,7 @@ class PicoString implements \ArrayAccess
 
     public function offsetExists(mixed $offset): bool
     {
-        return is_int($offset) && $offset >= 0 && $offset < strlen($this->data);
+        return $offset >= 0 && $offset < strlen($this->data);
     }
 
     /**
@@ -135,7 +141,8 @@ class PicoString implements \ArrayAccess
      */
     public function offsetGet(mixed $offset): mixed
     {
-        return $this->charAt((int) $offset);
+        /** @var int $offset */
+        return $this->charAt($offset);
     }
 
     public function offsetSet(mixed $offset, mixed $value): void

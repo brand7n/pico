@@ -16,6 +16,9 @@ class StringBuilder
         $this->buffer .= $s->raw();
     }
 
+    /**
+     * @param int<0, 255> $byte
+     */
     public function appendChar(int $byte): void
     {
         $this->buffer .= chr($byte);
